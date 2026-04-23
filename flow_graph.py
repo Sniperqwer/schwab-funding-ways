@@ -60,14 +60,14 @@ NODES: list[Node] = [
     Node("HSBC_HKD",            "汇丰香港\nHKD",         "汇丰香港", "HKD", 3,  0.0),
     Node("HSBC_USD",            "汇丰香港\nUSD",         "汇丰香港", "USD", 3, +1.0),
 
-    # layer 4: Wise
-    Node("WISE_HKD",            "Wise\nHKD",             "Wise",     "HKD", 4, -0.5),
-    Node("WISE_USD",            "Wise\nUSD",             "Wise",     "USD", 4, +0.5),
+    # layer 4: Wise (放在底部两行, 避免穿越上方路径)
+    Node("WISE_HKD",            "Wise\nHKD",             "Wise",     "HKD", 4, +1.0),
+    Node("WISE_USD",            "Wise\nUSD",             "Wise",     "USD", 4, +2.0),
 
     # layer 5: Schwab 三个收款端点
     Node("SCHWAB_CITI_HK",      "Schwab\nCiti HK",       "Schwab",   "HKD", 5, -1.0),
     Node("SCHWAB_CITIBANK_NYC", "Schwab\nCitibank NYC",  "Schwab",   "USD", 5,  0.0),
-    Node("SCHWAB_JPM_SF",       "Schwab\nJPM SF",        "Schwab",   "USD", 5, +1.0),
+    Node("SCHWAB_JPM_SF",       "Schwab\nJPM SF",        "Schwab",   "USD", 5, +2.0),
 ]
 
 
@@ -140,7 +140,6 @@ def build_graph(nodes: list[Node], edges: list[Edge],
                    "highlight": {"background": bg, "border": "#000"}},
             title=f"{n.institution} · {n.currency}",
         )
-    fx_seen: dict[str, int] = {}
     for e in edges:
         is_fx = e.kind == "fx"
         kwargs = dict(
@@ -149,22 +148,20 @@ def build_graph(nodes: list[Node], edges: list[Edge],
             color={"color": EDGE_COLOR.get(e.kind, "#888")},
             dashes=is_fx,
             width=1 if is_fx else 1.8,
-            font={"size": 10 if is_fx else 12,
+            font={"size": 12,
                   "color": "#a04500" if is_fx else "#222",
                   "strokeWidth": 5, "strokeColor": "#fafafa",
                   "align": "middle"},
         )
         if is_fx:
-            # FX 边都在同一列内 (layer 相同), 按行距决定弯曲幅度,
-            # 同源轮流 CW/CCW 向左/右扇出避免重叠
+            # FX 边统一向右弧出 (CCW), 避免弧顶压在列中间节点上导致标签不可见.
+            # row_dist=1 → 小弧; row_dist=2 → 大弧, 标签落在两列之间的空白区.
             src_n, dst_n = node_by_id[e.src], node_by_id[e.dst]
             row_dist = abs(src_n.row - dst_n.row)
-            idx = fx_seen.get(e.src, 0)
-            fx_seen[e.src] = idx + 1
             kwargs["smooth"] = {
                 "enabled": True,
-                "type": "curvedCW" if idx % 2 == 0 else "curvedCCW",
-                "roundness": 0.25 + 0.18 * max(0.0, row_dist - 1),
+                "type": "curvedCCW",
+                "roundness": 0.3 if row_dist <= 1 else 0.55,
             }
         else:
             kwargs["smooth"] = {
